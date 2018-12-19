@@ -18,7 +18,7 @@ export interface LdrImage {
     data: HTMLImageElement;
 }
 
-import ExrParserWorker = require('worker-loader?name=exr.worker.js!./exr-parser.worker.js');
+// import ExrParserWorker = require('worker-loader?name=exr.worker.js!./exr-parser.worker.js');
 
 /**
  * A pool of exr parsing webworkers that get assigned tasks in a round-robin fashion.
@@ -35,7 +35,7 @@ class ExrParserPool {
     constructor(private nWorkers: number) {
         this.workers = [];
         for (let i = 0; i < nWorkers; ++i) {
-            const worker = new ExrParserWorker();
+            const worker = new Worker('/exr-parser.worker.js');
             this.workers.push(worker);
             worker.onmessage = this.handleResult.bind(this);
         }

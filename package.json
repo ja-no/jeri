@@ -16,11 +16,12 @@
     "@types/react-dom": "15.5.6",
     "common-prefix": "1.1.0",
     "normalize-wheel": "1.0.1",
+    "react": "15.6.1",
+    "react-dom": "15.6.1",
     "styled-components": "2.2.2",
     "webpack-cli": "^3.1.2"
   },
   "devDependencies": {
-    "file-loader": "1.1.11",
     "json-loader": "0.5.7",
     "serve": "9.1.2",
     "source-map-loader": "0.2.3",
@@ -31,14 +32,10 @@
     "webpack": "4.19.1",
     "worker-loader": "2.0.0"
   },
-  "peerDependencies": {
-    "react": "15.6.1",
-    "react-dom": "15.6.1"
-  },
   "scripts": {
     "build": "npm run build-npm && npm run build-web",
-    "build-npm": "tsc && cp -r ./src/exr-wrap build_npm && cp -r ./src/utils/exr-parser.worker.js build_npm/utils",
-    "build-web": "webpack",
+    "build-npm": "tsc     && cp -r ./src/exr-wrap build_npm/ && cp ./src/utils/exr-parser.worker.js build_npm/utils/",
+    "build-web": "webpack && cp  ./src/exr-wrap/* build_web/ && cp ./src/utils/exr-parser.worker.js build_web/",
     "clean": "rm -rf build build_web/jeri* build_web/*.worker.js build_web/*.wasm build_web/*.worker.js.map",
     "docs": "typedoc --out documentation src",
     "lint": "tslint -c tslint.json 'src/**/*.ts' 'src/**/*.tsx'",
