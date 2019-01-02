@@ -1,21 +1,25 @@
-export type Image = LdrImage | HdrImage;
+export type Image = LdrImage | HdrImage | Mp4Sequence;
 
-export interface HdrImage {
-    type: 'HdrImage';
+export interface GenericImage {
     url: string;
     width: number;
     height: number;
-    nChannels: number;
+    nChannels: number;    
+}
+
+export interface HdrImage extends GenericImage {
+    type: 'HdrImage';
     data: Float32Array;
 }
 
-export interface LdrImage {
+export interface LdrImage extends GenericImage {
     type: 'LdrImage';
-    url: string;
-    width: number;
-    height: number;
-    nChannels: number;
     data: HTMLImageElement;
+}
+
+export interface Mp4Sequence extends GenericImage {
+    type: 'Mp4Sequence';
+    data: HTMLVideoElement;
 }
 
 // import ExrParserWorker = require('worker-loader?name=exr.worker.js!./exr-parser.worker.js');
@@ -30,7 +34,7 @@ class ExrParserPool {
     /** Each job that is sent to a worker gets a unique jobId. */
     private jobId: number = 0;
     /** After sending a job to a web worker, we register a return handler for when data comes back  */
-    private returnHandlers: {[x: string]: Function } = {};
+    private returnHandlers: { [x: string]: Function } = {};
 
     constructor(private nWorkers: number) {
         this.workers = [];
@@ -92,6 +96,8 @@ export function loadImage(url: string): Promise<Image> {
     const suffix = url.split('.').pop();
     if (suffix && suffix.toLocaleLowerCase() === 'exr') {
         return loadExr(url);
+    } if (suffix && suffix.toLocaleLowerCase() === 'mp4') {
+        return loadMp4(url);
     } else {
         return loadLdr(url);
     }
@@ -112,6 +118,7 @@ export function loadLdr(url: string): Promise<LdrImage> {
     console.time(`Downloading '${url}'`); // tslint:disable-line
     return new Promise((resolve, reject) => {
         const image = new Image();
+        image.src = url;
         image.onerror = (error) => reject(new Error(`Failed to load '${url}'.`));
         image.onload = () => {
             console.timeEnd(`Downloading '${url}'`); // tslint:disable-line
@@ -137,11 +144,44 @@ export function loadLdr(url: string): Promise<LdrImage> {
                 reject(new Error(`Failed to load image '${url}': ${error}`));
             }
         };
-        image.src = url;
     });
 }
 
-const pixelColorCache: Map<Image, Function> = new Map();
+export function loadMp4(url: string): Promise<Mp4Sequence> {
+    console.time(`Downloading '${url}'`); // tslint:disable-line
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.muted = true;
+        video.loop = true;
+        video.crossOrigin = "anonymous";
+        video.src = url;
+        video.play();
+
+        let mp4Sequence = {
+            url: url,
+            width: 0,
+            height: 0,
+            nChannels: 4,
+            data: video,
+            type: 'Mp4Sequence',
+        } as Mp4Sequence;
+
+        video.onerror = (error) => {
+            reject(new Error(`Failed to load '${url}'.`));
+        }
+        video.onloadeddata = () => {
+            console.timeEnd(`Downloading '${url}'`); // tslint:disable-line
+        }
+        video.onplaying = () => {
+            mp4Sequence.width = video.videoWidth;
+            mp4Sequence.height = video.videoHeight;
+        };
+        resolve(mp4Sequence);
+    });
+}
+
+const pixelColorCache: Map<string, Function> = new Map();
 /**
  * Extract a pixel's color
  * Caches data for LDR images
@@ -154,7 +194,7 @@ export function getPixelColor(image: Image, x: number, y: number, c: number) {
     if (image.type === 'HdrImage') {
         return image.data[(x + y * image.width) * image.nChannels + c];
     } else {
-        let getColorFnc = pixelColorCache.get(image);
+        let getColorFnc = pixelColorCache.get(image.url);
         if (getColorFnc == null) {
             const canvas = document.createElement('canvas');
             canvas.width = image.width;
@@ -163,9 +203,11 @@ export function getPixelColor(image: Image, x: number, y: number, c: number) {
             if (!ctx) {
                 throw new Error('Failed to create 2d context to retrieve LDR image data');
             }
-            ctx.drawImage(image.data, 0, 0, image.width, image.height);
-            getColorFnc = (X: number, Y: number, C: number) => ctx.getImageData(X, Y, 1, 1).data[C] / 256;
-            pixelColorCache.set(image, getColorFnc);
+            getColorFnc = (X: number, Y: number, C: number) => {
+                ctx.drawImage(image.data, 0, 0, image.width, image.height);
+                return ctx.getImageData(X, Y, 1, 1).data[C] / 256;
+            }
+            pixelColorCache.set(image.url, getColorFnc);
         }
         return getColorFnc(x, y, c);
     }
@@ -199,6 +241,18 @@ export class ImageCache {
             return this.load(url);
         }
     }
+
+    // syncVideoPlaybacks(time: number) {
+    //     console.log('restarting playback');
+    //     for (const key in this.images) {
+    //         if (this.images.hasOwnProperty(key)) {
+    //             let image = this.images[key];
+    //             if (image.type === 'Mp4Sequence') {
+    //                 image.data.currentTime = time;
+    //             }
+    //         }
+    //     }
+    // }
 
     private store(url: string, image: Image): Image {
         if (this.currentlyDownloading(url)) {

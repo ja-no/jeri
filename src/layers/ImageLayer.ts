@@ -309,9 +309,10 @@ export default class ImageLayer extends Layer {
    * or when the size of the container changed
    */
   private checkRender() {
-    if (this.resize() || this.needsRerender) {
-      this.needsRerender = false;
+
+    if (this.resize() || this.needsRerender || this.image.type === 'Mp4Sequence') {
       this.draw();
+      this.needsRerender = false;
     }
     requestAnimationFrame(this.checkRender);
   }
@@ -416,12 +417,15 @@ export default class ImageLayer extends Layer {
     const fragmentShader = compileShader(fragmentShaderSource, this.gl.FRAGMENT_SHADER, this.gl);
 
     const program = this.gl.createProgram();
-    if (!program || !this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
-        throw new Error('Failed to link the program.');
+    if (!program) {
+        throw new Error('Failed to create the program.');
     }
     this.gl.attachShader(program, vertexShader);
     this.gl.attachShader(program, fragmentShader);
     this.gl.linkProgram(program);
+    if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
+      throw new Error('Failed to link the program.');
+    }
     this.gl.useProgram(program);
     return program;
   }
@@ -502,6 +506,16 @@ export default class ImageLayer extends Layer {
       throw new Error('Failed to initialize image texture');
     }
     this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
+    this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+    return texture;
+  }
+
+  private copyTextureData(image: Image, texture: WebGLTexture) {
+    this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
     if (image.type === 'HdrImage') {
       if (image.nChannels === 1) {
           this.gl.texImage2D(
@@ -531,28 +545,43 @@ export default class ImageLayer extends Layer {
         throw new Error(`Don't know what to do with ${image.nChannels} image channels.`);
       }
     } else {
-      this.gl.texImage2D(
-        this.gl.TEXTURE_2D,
-        0,
-        this.gl.RGBA,
-        this.gl.RGBA,
-        this.gl.UNSIGNED_BYTE,
-        image.data
-      );
+      if (image.width > 0 && image.height > 0) {
+        this.gl.texImage2D(
+          this.gl.TEXTURE_2D,
+          0,
+          this.gl.RGBA,
+          this.gl.RGBA,
+          this.gl.UNSIGNED_BYTE,
+          image.data
+        );
+      } else {
+        const dummyData = new Uint8Array([0, 0, 0, 255]);  // opaque blue
+        this.gl.texImage2D(
+          this.gl.TEXTURE_2D,
+          0,
+          this.gl.RGBA,
+          1,
+          1,
+          0,
+          this.gl.RGBA,
+          this.gl.UNSIGNED_BYTE,
+          dummyData
+        );        
+      }
     }
-    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
-    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
-    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
-    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
-    this.gl.bindTexture(this.gl.TEXTURE_2D, null);
-    return texture;
   }
 
   private getTexture(image: Image) {
     let texture = this.textures.get(image.url);
     if (!texture) {
-      texture = this.createTexture(image);
-      this.textures.set(image.url, texture);
+      const newTexture = this.createTexture(image);
+      this.copyTextureData(image, newTexture);
+      this.textures.set(image.url, newTexture);
+      texture = newTexture;
+    } else {
+      if (image.type === 'Mp4Sequence') {
+        this.copyTextureData(image, texture);
+      }
     }
     return texture;
   }

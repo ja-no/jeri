@@ -49,9 +49,9 @@ export default class TextLayer extends Layer {
    * or when the size of the container changed
    */
   private checkRender() {
-    if (this.resize() || this.needsRerender) {
-      this.needsRerender = false;
+    if (this.resize() || this.needsRerender || this.image.type === 'Mp4Sequence') {
       this.draw();
+      this.needsRerender = false;
     }
     requestAnimationFrame(this.checkRender);
   }
