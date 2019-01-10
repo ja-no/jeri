@@ -416,12 +416,15 @@ export default class ImageLayer extends Layer {
     const fragmentShader = compileShader(fragmentShaderSource, this.gl.FRAGMENT_SHADER, this.gl);
 
     const program = this.gl.createProgram();
-    if (!program || !this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
-        throw new Error('Failed to link the program.');
+    if (!program) {
+        throw new Error('Failed to create a program.');
     }
     this.gl.attachShader(program, vertexShader);
     this.gl.attachShader(program, fragmentShader);
     this.gl.linkProgram(program);
+    if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
+      throw new Error('Failed to link program');
+    }
     this.gl.useProgram(program);
     return program;
   }
