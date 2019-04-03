@@ -265,12 +265,14 @@ export default class ImageViewer extends React.Component<ImageViewerProps, Image
   }
 
   /**
-   * Return a string from an array of strings at a given position. 
+   * Return a string from an array of strings at a given position.
    * If the first argument is a string (not an array), then it will return the string.
    */
   private getStringAtPos(input: string | string[], position: number): string {
     if (Array.isArray(input)) {
-      return this.props.baseUrl + input[position % input.length];
+      // Get a (positive) index (the code below handles negative positions)
+      const index = ((position % input.length) + input.length) % input.length;
+      return this.props.baseUrl + input[index];
     } else {
       return this.props.baseUrl + input;
     }
